@@ -72,6 +72,7 @@ n1 = 26
 n2 = 13
 
 sysMtxRef = loadMtxExp(inhouseLoadStr, device=device).reshape(-1, n1 * n2)
+frequency_selection = loadmat("inhouseData/selElems.mat")["selElems"].astype("bool").squeeze()
 
 if inverseCrime: # bicubic upsampling followed by downsampling
     interpolater = loadmat('data/interpExp2.mat')['interpolater']
@@ -264,7 +265,7 @@ for i, descriptor in enumerate(descriptors):
             theMd, _ = getModelForADMMLD(descriptor)
         elif testMode == 5:
             numIter = 25
-            theMd, _ = getModelForImplicitLD(descriptor, numIter, save_models=True)
+            theMd, _ = getModelForImplicitLD(descriptor, frequency_selection=frequency_selection, numIter=numIter, save_models=True)
 
         Vt = V_.T
 

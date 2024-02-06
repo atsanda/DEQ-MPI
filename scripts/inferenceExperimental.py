@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from scipy.io import loadmat
 import torch.nn.functional as F
 
-from data import *
-from reconAlgos import *
-from modelClasses import *
-from trainerClasses import *
+from deqmpi.data import *
+from deqmpi.reconAlgos import *
+from deqmpi.modelClasses import *
+from deqmpi.trainerClasses import *
 
 import gc
 import time
@@ -60,17 +60,23 @@ inverseCrime = True
 inhouseLoadStr = "inhouseData/expMatinHouse"
 inhousePhantomLoadStr = "inhouseData/expPhantominHouse.mat"
 
-torch.cuda.set_device(gpuNo)
-print(torch.cuda.get_device_name(gpuNo))
+try:
+    torch.cuda.set_device(gpuNo)
+    print(torch.cuda.get_device_name(gpuNo))
+    device = f"cuda:{gpuNo}"
+except AttributeError:
+    print("Using CPU")
+    device = "cpu"
 
 n1 = 26
 n2 = 13
 
-sysMtxRef = loadMtxExp(inhouseLoadStr).reshape(-1, n1 * n2)
+sysMtxRef = loadMtxExp(inhouseLoadStr, device=device).reshape(-1, n1 * n2)
+frequency_selection = loadmat("inhouseData/selElems.mat")["selElems"].astype("bool").squeeze()
 
 if inverseCrime: # bicubic upsampling followed by downsampling
-    interpolater = loadmat('interpExp2.mat')['interpolater']
-    sysMtxHRint2 = sysMtxRef @ torch.from_numpy(interpolater).float().cuda()
+    interpolater = loadmat('data/interpExp2.mat')['interpolater']
+    sysMtxHRint2 = sysMtxRef @ torch.from_numpy(interpolater).float().to(device)
     dataGenMtx = sysMtxHRint2
     sysMtx = F.avg_pool2d(sysMtxHRint2.reshape(sysMtxRef.shape[0], 2 * n1, 2 * n2), 2).reshape(sysMtxRef.shape[0], -1)
 else:
@@ -94,7 +100,7 @@ theSys = U_.T @ sysMtx
 bconcat = loadmat(inhousePhantomLoadStr)["bconcat"] * 2
 
 underlyingEpsilon = None
-myDataGen = torch.from_numpy(bconcat).float().cuda().reshape(1, -1)
+myDataGen = torch.from_numpy(bconcat).float().to(device).reshape(1, -1)
 
 datatC, lsqrInp = admmInputGenerator(myDataGen, U_, S_, V_, [-1, 1, n1, n2])
 
@@ -242,7 +248,7 @@ for i, descriptor in enumerate(descriptors):
             theMd, _ = getModelForADMMLD(descriptor)
         elif testMode == 5:
             numIter = 25
-            theMd, _ = getModelForImplicitLD(descriptor, numIter)
+            theMd, _ = getModelForImplicitLD(descriptor, frequency_selection=frequency_selection, numIter=numIter)
 
         Vt = V_.T
 
