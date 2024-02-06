@@ -442,7 +442,7 @@ def getDCNoisyData(data, stdVal, sysMtx):
     genData = noiselessData + genNoise # add noise in original data domain
     return noiselessData, genData
 
-from reconUtils import proj2Tmtx
+from .reconUtils import proj2Tmtx
 
 def trainDCdenoiserPsi(model, epoch_nb, loss, optimizer, scheduler, trainDataset, valDataset, batch_size_train, batch_size_val, theSysl, sysMtxl, Ul, Sl, Vl, noisySys = 0, imgSizes = [32, 32] \
     , rescaleVals = [1, 1], saveModelEpoch=0, valEpoch=0, saveDirectory='', pSNRval=40, wandbFlag=False, fixedNoiseStdFlag=False, nbOfSingulars=0, lambdaVal = 100):

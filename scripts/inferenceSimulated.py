@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from scipy.io import loadmat
 import torch.nn.functional as F
 
-from data import *
-from reconAlgos import *
-from modelClasses import *
-from trainerClasses import *
+from deqmpi.data import *
+from deqmpi.reconAlgos import *
+from deqmpi.modelClasses import *
+from deqmpi.trainerClasses import *
 
 import gc
 import time
@@ -74,7 +74,7 @@ n2 = 13
 sysMtxRef = loadMtxExp(inhouseLoadStr, device=device).reshape(-1, n1 * n2)
 
 if inverseCrime: # bicubic upsampling followed by downsampling
-    interpolater = loadmat('interpExp2.mat')['interpolater']
+    interpolater = loadmat('data/interpExp2.mat')['interpolater']
     sysMtxHRint2 = sysMtxRef @ torch.from_numpy(interpolater).float().to(device)
     dataGenMtx = sysMtxHRint2
     sysMtx = F.avg_pool2d(sysMtxHRint2.reshape(sysMtxRef.shape[0], 2 * n1, 2 * n2), 2).reshape(sysMtxRef.shape[0], -1)
