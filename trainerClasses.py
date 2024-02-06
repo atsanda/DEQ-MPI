@@ -70,7 +70,7 @@ def transformDataset(data, imgSizes, rescaleVals, randVals = None):
     data *= randScale
     return data
 
-def getNoisyData(data, stdVal, sysMtx, colored = 0):
+def getNoisyData(data, stdVal, sysMtx, colored = 0, return_noise=False):
     genData = F.linear(data.reshape(data.shape[0], 1, -1), sysMtx)
     if colored > 0:
         if colored > 2: # laplacian noise
@@ -88,7 +88,10 @@ def getNoisyData(data, stdVal, sysMtx, colored = 0):
     else:
         genNoise = stdVal * torch.randn_like(genData) # generate random
     genData += genNoise # add noise in original data domain
-    return genData
+    if return_noise:
+        return genData, genNoise
+    else:
+        return genData
 
 def admmInputGenerator(genData, U_, S_, V_, imgSize):
 

@@ -45,6 +45,7 @@ class rdnDenoiserResRelu(nn.Module):
         self.conv4 = nn.Conv2d(in_channels=nb_of_features, out_channels= out_channel, kernel_size=3,stride=1,padding=1, bias = bias)
         self.lastReLU = nn.ReLU(inplace=False)
     def forward(self, x):
+        # dumph5("shared_net_input.h5", x)
         x_init = x
         x = self.conv0(x)
         residual0 = x
@@ -56,6 +57,7 @@ class rdnDenoiserResRelu(nn.Module):
         x = torch.cat(rdb_outs, dim=1)
         x = self.conv2(x)
         x = self.conv3(x) +residual0
+        # dumph5("shared_net_out.h5", self.lastReLU(self.conv4(x) + x_init))
         return self.lastReLU(self.conv4(x) + x_init)
 
 pair = lambda x: x if isinstance(x, tuple) else (x, x)
@@ -287,9 +289,9 @@ class rdnADMMnet(nn.Module):
         return x.reshape(x_inShape)
 
 class usePreProcessedSelElems():
-    def __init__(self, myLoadedFile = "./inhouseData/selElems.mat"):
-        self.myLoadedFile = myLoadedFile
-        self.selElems = loadmat(self.myLoadedFile)["selElems"].astype("bool").squeeze()
+    def __init__(self, frequency_selection: np.ndarray):#myLoadedFile = "./inhouseData/selElems.mat"):
+        #self.myLoadedFile = myLoadedFile
+        self.selElems = frequency_selection #loadmat(self.myLoadedFile)["selElems"].astype("bool").squeeze()
         self.numAngle = 60
         self.numFreq = 247
         self.numFilt = 13 * 10
@@ -299,7 +301,6 @@ class usePreProcessedSelElems():
         halfSize = y.shape[2] // 2
         dnm = torch.zeros((y.shape[0], 2, self.numAngle * self.numFreq), dtype=y.dtype, device = y.device).type_as(y)
         self.useElem = self.selElems
-
         dnm[:, :, self.useElem] = y.reshape(y.shape[0], 2, halfSize)
 
         return dnm.reshape(y.shape[0], 2, self.numAngle, self.numFreq)[:, :, :, :self.numFilt]
@@ -319,7 +320,7 @@ class usePreProcessedSelElems():
         return yOut
 
 class consistencyNetworkMD(nn.Module):
-    def __init__(self, nb_of_features, nb_of_blocks, useNormalization = 0, numDim = 2, bias = True):
+    def __init__(self, frequency_selection, nb_of_features, nb_of_blocks, useNormalization = 0, numDim = 2, bias = True):
         super(consistencyNetworkMD,self).__init__()
 
         self.numDim = numDim
@@ -348,11 +349,16 @@ class consistencyNetworkMD(nn.Module):
         # else:
         #     self.residual = True
 
-        self.preProcessCls = usePreProcessedSelElems()
+        self.preProcessCls = usePreProcessedSelElems(frequency_selection)
         # self.reluL = nn.ReLU()
         self.numAngle = 60 # num simulation angles
 
+    # y.shape = s.shape [256, 1, 5486]
+    # 
     def forward(self, s, y, epsilon, Ua = 1):
+        # dumph5("y_consist_in.h5", y)  
+        # dumph5("s_consist_in.h5", s)  
+        # dumph5("epsilon_consist_in.h5", epsilon)  
         if y.shape[2] > 2e3: # experimental data
             if isinstance(Ua, torch.Tensor):
                 z2Ext = self.preProcessCls.projectA(F.linear(s, Ua)) # extended s
@@ -365,6 +371,7 @@ class consistencyNetworkMD(nn.Module):
                 z2Ext = z2Ext.reshape(yShape[0], yShape[1], yShape[2], 10, 13)
                 yExt = yExt.reshape(yShape[0], yShape[1], yShape[2], 10, 13)
             elif self.numDim == 1:
+                # goes here
                 z2Ext = z2Ext.reshape(yShape[0], yShape[1], yShape[2] * 10 * 13)
                 yExt = yExt.reshape(yShape[0], yShape[1], yShape[2] * 10 * 13)
         else: # simulated data
@@ -374,10 +381,16 @@ class consistencyNetworkMD(nn.Module):
             if self.numDim == 1:
                 z2Ext = z2Ext.reshape(yShape[0], yShape[1], -1)
                 yExt = yExt.reshape(yShape[0], yShape[1], -1)
-            
+        # yExt.shape = torch.Size([256, 2, 7800])
+        # dumph5("s_consist_input.h5", s)  
+        # dumph5("z2Ext.h5", z2Ext)
+        # dumph5("y_consist_input.h5", y)    
+        # dumph5("yExt.h5", yExt)        
+        # dumph5("netIn.h5", torch.concat((yExt, z2Ext), dim = 1))   
         net1 = self.relu0(self.conv0(torch.concat((yExt, z2Ext), dim = 1)))
-
+        # dumph5("net1.h5", net1)   
         net2 = self.midConvs(net1)
+        # dumph5("net2.h5", net2) 
         netOut = self.convL(net2).reshape(yShape)
 
         if y.shape[2] > 2e3: # experimental data
@@ -388,10 +401,14 @@ class consistencyNetworkMD(nn.Module):
         else:
             netUnProj = netOut.reshape(y.shape)
 
+        # dumph5("netUnProj.h5", netUnProj) 
+        # dumph5("netOut.h5", netOut)   
+
         if self.useNormalization > 0:
             # nrmVal = torch.linalg.norm(s - y, dim=(1,2))
             if self.useNormalization == 1:
                 nrmVal = torch.linalg.norm(netUnProj - y, dim=(1,2)) # limit innovation rate
+                # dumph5("nrmVal1.h5", nrmVal)  
             elif self.useNormalization == 2:
                 nrmVal = torch.linalg.norm(netUnProj - 0, dim=(1,2)) # limit innovation rate
             elif self.useNormalization == 3:
@@ -404,11 +421,13 @@ class consistencyNetworkMD(nn.Module):
                 nrmVal[theInd] = epsilon.squeeze()[theInd]
             else:
                 nrmVal[nrmVal < epsilon] = epsilon
+            # dumph5("nrmVal_after.h5", nrmVal)
             netUnProj *= epsilon / nrmVal[:,None,None]
 
         # netOut = (epsilon / nrmVal[:,None,None]) * (z2Ext - yExt)
 
         # return y + F.linear(self.preProcessCls.unProjectA(yExt + netOut), Ua.T) # return reference Value back
+        # dumph5("consistency_step_out.h5", y + netUnProj)
         return y + netUnProj # return reference Value back
 
 
@@ -521,7 +540,7 @@ class rdnLDFixedPtspc(nn.Module):
         return torch.cat((x.reshape(Nbatch, -1), d0.reshape(Nbatch, -1), d2.reshape(Nbatch, -1)), dim = 1 )
 
 class rdnLDFixedPt(nn.Module):
-    def __init__(self, input_channels, nb_of_features, nb_of_blocks, layer_in_each_block, growth_rate, nb_of_featuresL, nb_of_blocksL, useNormalizationL = 0, bias = True, numDim = 2, consistencyDim = 3):
+    def __init__(self, input_channels, nb_of_features, nb_of_blocks, layer_in_each_block, growth_rate, nb_of_featuresL, nb_of_blocksL, frequency_selection, useNormalizationL = 0, bias = True, numDim = 2, consistencyDim = 3):
 
         super(rdnLDFixedPt,self).__init__()
         if numDim == 2:
@@ -534,10 +553,15 @@ class rdnLDFixedPt(nn.Module):
         if consistencyDim == 0:
             self.consistencyNet = lambda s, y, epsilon, Ua: proj2Tmtx(s, y, epsilon)
         elif consistencyDim < 4:
-            self.consistencyNet = consistencyNetworkMD(nb_of_featuresL, nb_of_blocksL, useNormalizationL, numDim = consistencyDim).cuda()
+            self.consistencyNet = consistencyNetworkMD(frequency_selection, nb_of_featuresL, nb_of_blocksL, useNormalizationL, numDim = consistencyDim)
         
     def forward(self, theIn, fixedParams):
         datatC, AtC, MtC, epsilon, x_inShape = fixedParams
+        # for var, name in zip(
+        #     [theIn, datatC, AtC, MtC, epsilon, x_inShape],
+        #     ["theIn", "datatC", "AtC", "MtC", "epsilon", "x_inShape"],
+        # ):
+        #     dumph5(f"{name}_rdnLDFixedPt.h5", var)
 
         # tempTime = time.time()
 
@@ -550,18 +574,32 @@ class rdnLDFixedPt(nn.Module):
         Ax = F.linear(x_in, AtC)
 
         z0 = self.sharedNet((x_in - d0).reshape(x_inShape)).reshape(Nbatch, -1) 
+        # dumph5(
+        #     "z0_rdnLDFixedPt.h5", z0        
+        # )
 
         z2 = self.consistencyNet((Ax - d2).reshape(Nbatch, 1, -1),
                     datatC.reshape(Nbatch, 1, -1), epsilon, Ua = 1).reshape(Nbatch, -1)
+        
+        # dumph5(
+        #     "z2_rdnLDFixedPt.h5", z2        
+        # )
 
         r = (z0 + d0) + F.linear(z2 + d2, AtC.T)
+        # dumph5(
+        #     "r_rdnLDFixedPt.h5", r        
+        # )
         x = F.linear(r, MtC)
         Ax = F.linear(x, AtC)
         
         d0 = d0 - x + z0
         d2 = d2 - Ax + z2
 
-        return torch.cat((x.reshape(Nbatch, -1), d0.reshape(Nbatch, -1), d2.reshape(Nbatch, -1)), dim = 1 )
+        out = torch.cat((x.reshape(Nbatch, -1), d0.reshape(Nbatch, -1), d2.reshape(Nbatch, -1)), dim = 1 )
+        # dumph5(
+        #     "out_rdnLDFixedPt.h5", out        
+        # )
+        return out
 
 class rdnADMMnetVerbose(nn.Module):
     def __init__(self,input_channels, nb_of_steps, nb_of_features, nb_of_blocks, layer_in_each_block, growth_rate, bias = True):
@@ -642,8 +680,10 @@ def fixedPointTekrarlar(f, x0, max_iter=50):
     bsz, d = x0.shape
     H = W = 1
     out = x0.clone()
+    # dumph5("x0_fixedPointTekrarlar.h5", x0)
     for k in range(max_iter):
         out = f(out)
+        # dumph5(f"x{k+1}_fixedPointTekrarlar.h5", out)
     # print(k)
     return out.view_as(x0), 0
 
@@ -941,10 +981,9 @@ def getModel(descriptor):
                 layer_in_each_block=layer_in_each_block, 
                 growth_rate=growth_rate,
                 out_channel=1,
-                bias = biasFlag).cuda()
+                bias = biasFlag)
 
     model.load_state_dict(torch.load(filePath, map_location='cpu'))
-    model.cuda()
     for param in model.parameters():
         param.requires_grad = False
     model.eval()
@@ -1049,8 +1088,8 @@ def getModel3dDenoiser(descriptor):
     print(sum(pVal.numel() for pVal in model.parameters() if not pVal.requires_grad))
     return model
 
-def getModelForImplicitLD(descriptor, getMaxFlag = True, numIter = 25):
-    folderPath = trainedNetOffset + "training/deqmpi/"+descriptor
+def getModelForImplicitLD(descriptor, frequency_selection, getMaxFlag = True, numIter = 25, save_models=False, base_folder=trainedNetOffset):
+    folderPath = base_folder + "training/deqmpi/"+descriptor
 
     fileName = "epoch150END.pth"
     if getMaxFlag:
@@ -1092,12 +1131,14 @@ def getModelForImplicitLD(descriptor, getMaxFlag = True, numIter = 25):
     useNormalizationL = int(splt[offset + 29])
 
     model2 = rdnLDFixedPt(
-        1, nb_of_features, nb_of_blocks, layer_in_each_block, growth_rate, nb_of_featuresL, nb_of_blocksL, useNormalizationL, bias=True, numDim=2, consistencyDim = consistencyDim).cuda()
-    
+        1, nb_of_features, nb_of_blocks, layer_in_each_block, 
+        growth_rate, nb_of_featuresL, nb_of_blocksL, frequency_selection, 
+        useNormalizationL, bias=True, numDim=2, consistencyDim = consistencyDim
+    )
+
     model = DEQFixedPoint(model2, fixedPointTekrarlar, max_iter = numIter)
 
     model.load_state_dict(torch.load(filePath, map_location='cpu'))
-    model = model.cuda()
 
     for param in model.parameters():
         param.requires_grad = False
@@ -1147,11 +1188,10 @@ def getModelForADMMLD(descriptor, getMaxFlag = False):
     useNormalizationL = int(splt[offset + 29])
 
     model = rdnADMMLDnet(
-        1, nb_of_steps, nb_of_features, nb_of_blocks, layer_in_each_block, growth_rate, nb_of_featuresL, nb_of_blocksL, useNormalizationL, bias=True, numDim=2, consistencyDim = consistencyDim).cuda()
+        1, nb_of_steps, nb_of_features, nb_of_blocks, layer_in_each_block, growth_rate, nb_of_featuresL, nb_of_blocksL, useNormalizationL, bias=True, numDim=2, consistencyDim = consistencyDim)
     # print(filePath)
 
     model.load_state_dict(torch.load(filePath, map_location='cpu'))
-    model = model.cuda()
     for param in model.parameters():
         param.requires_grad = False
     model.eval()

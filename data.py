@@ -24,7 +24,7 @@ def preProcessInhouseMtx(folderPath):
 
     return d5CrpSel, selElems, d5['rNew']
 
-def loadMtxExp(folderPath):
+def loadMtxExp(folderPath, device="cuda:0"):
     n1 = 26
     n2 = 13
     selFreqBeg = 1
@@ -32,7 +32,7 @@ def loadMtxExp(folderPath):
     expMtx = loadmat(folderPath)['Aconcat']
     newSize = [-1, n1, n2]
     expMtx = expMtx.reshape(newSize)
-    expMtx = torch.Tensor(expMtx).float().reshape(newSize).cuda()
+    expMtx = torch.Tensor(expMtx).float().reshape(newSize).to(device)
     return expMtx
     
 class MRAdatasetH5NoScale(Dataset): #Scaling: allPatchesOfAllSubjects =/ max(allPatchesOfAllSubjects )

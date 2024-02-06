@@ -15,7 +15,7 @@ class returnHfen():
         xAxs = np.linspace(-3,3,Nx)
         xx, yy = np.meshgrid(xAxs, xAxs,indexing='ij')
         logFilter = -1/(np.pi*sig**4) * (1 - ((xx**2 + yy**2))/(2*sig**2)) * np.exp(-(xx**2 + yy**2) / (2 * sig**2))
-        self.logFilterTorch = torch.from_numpy(logFilter).float().cuda().reshape(1,1,Nx,Nx)
+        self.logFilterTorch = torch.from_numpy(logFilter).float().reshape(1,1,Nx,Nx)
         self.imgSize = imgSize
 
     def __call__(self, diff): # requires input of size .reshape(-1,1,32,32)
@@ -30,7 +30,7 @@ def objectiveValues(x, imgSize = [32, 32]):
     return (torch.sum(x.abs(), dim=1)).detach().cpu().numpy(), ( torch.sum( torch.sqrt(Q1(x.reshape(theShape))**2 + Q2(x.reshape(theShape))**2), dim = (1, 2) )   ).detach().cpu().numpy()
 
 class ADMMfncs:
-    def __init__(self, AtC, MaxIter, verboseIn, imgSize, diagnose = True):
+    def __init__(self, AtC, MaxIter, verboseIn, imgSize, diagnose=True):
         self.MaxIter = MaxIter
         self.imgSize = imgSize
         if diagnose == True:

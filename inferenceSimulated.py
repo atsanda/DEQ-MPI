@@ -60,17 +60,22 @@ inverseCrime = True
 inhouseLoadStr = "inhouseData/expMatinHouse"
 # inhousePhantomLoadStr = "inhouseData/expPhantominHouse.mat"
 
-torch.cuda.set_device(gpuNo)
-print(torch.cuda.get_device_name(gpuNo))
+try:
+    torch.cuda.set_device(gpuNo)
+    print(torch.cuda.get_device_name(gpuNo))
+    device = f"cuda:{gpuNo}"
+except AttributeError:
+    print("Using CPU")
+    device = "cpu"
 
 n1 = 26
 n2 = 13
 
-sysMtxRef = loadMtxExp(inhouseLoadStr).reshape(-1, n1 * n2)
+sysMtxRef = loadMtxExp(inhouseLoadStr, device=device).reshape(-1, n1 * n2)
 
 if inverseCrime: # bicubic upsampling followed by downsampling
     interpolater = loadmat('interpExp2.mat')['interpolater']
-    sysMtxHRint2 = sysMtxRef @ torch.from_numpy(interpolater).float().cuda()
+    sysMtxHRint2 = sysMtxRef @ torch.from_numpy(interpolater).float().to(device)
     dataGenMtx = sysMtxHRint2
     sysMtx = F.avg_pool2d(sysMtxHRint2.reshape(sysMtxRef.shape[0], 2 * n1, 2 * n2), 2).reshape(sysMtxRef.shape[0], -1)
 else:
@@ -94,7 +99,7 @@ theSys = U_.T @ sysMtx
 # loadPreProcessed = 0
 
 
-testDataHR = (MRAdatasetH5NoScale("datasets/testPatches.h5", prefetch=True)).data
+testDataHR = (MRAdatasetH5NoScale("datasets/testPatches.h5", prefetch=True, device=device)).data
 testData = transformDataset(testDataHR, [26, 13], [0.5, 1], [0, 0])
 
 underlyingImage = testData[:,:,:,:].squeeze()
@@ -108,7 +113,7 @@ stdVal = 10**(-pSNRval / 20) * stdScl# = std * (myDatNsless.shape[0:3]*)
 # underlyingEpsilon = stdVal * (nbOfSingulars)**(1/2)
 underlyingEpsilon = stdVal * (myDataNsless.shape[2])**(1/2)
 
-myDataGen = getNoisyData(testData, stdVal, sysMtxRef)
+myDataGen, noise = getNoisyData(testData, stdVal, sysMtxRef, return_noise=True)
 print("Data without inverse crime SNR: ", 20 * torch.log10(torch.norm(myDataNsless) / torch.norm(myDataGen - myDataNsless)))
 print("Data with inverse crime SNR: ", 20 * torch.log10(torch.norm(myDataLRinvCR) / torch.norm(myDataGen - myDataLRinvCR)))
 
@@ -205,7 +210,7 @@ for i, descriptor in enumerate(descriptors):
     if testMode == 0: # plug & play
         if not ("L1" in descriptor or "TV" in descriptor):
 
-            model = getModel(descriptor[:-3])
+            model = getModel(descriptor[:-3]).to(AtC)
             muScaleIter = 1
             mu2Scale = 1
             fnc1 = ppFnc2dnm(1/mu1, model, imgSize)
@@ -259,7 +264,7 @@ for i, descriptor in enumerate(descriptors):
             theMd, _ = getModelForADMMLD(descriptor)
         elif testMode == 5:
             numIter = 25
-            theMd, _ = getModelForImplicitLD(descriptor, numIter)
+            theMd, _ = getModelForImplicitLD(descriptor, numIter, save_models=True)
 
         Vt = V_.T
 
