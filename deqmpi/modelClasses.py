@@ -956,16 +956,14 @@ class rdb3d(nn.Module):
 
 
 
-def getModel(descriptor):
+def getModel(descriptor, base_folder="./training/denoiser/"):
     """descriptor: lr_0.001_wd_1e-07_bs_256_mxNs_0.05_fixNs_0_data_400_bias_0_mnNs_0.0"""
-#     rdnDenoiserNewNs_lr_0.001_wd_0.0_bs_64_mxNs_0.2_fixNs_1_data_mnNs_0_nF16_nB3_lieb5_gr8_mtx_4.5_3.5_svd_824
     descriptor = descriptor[:-11] if "\n_scheduled" in descriptor else descriptor
     descriptor = descriptor[:-3] if "+tv" in descriptor else descriptor
     descriptor = descriptor[:-3] if "+l1" in descriptor else descriptor
-    folderPath = "./training/denoiser/"+descriptor
-#     print(folderPath)
+    folderPath = os.path.join(base_folder, descriptor)
     fileName = [i for i in os.listdir(folderPath) if "END" in i][0]
-    filePath = folderPath + "/" +fileName
+    filePath = os.path.join(folderPath, fileName)
     
     if "rdnDenoiser" in descriptor:
         descriptor = descriptor[10:]
@@ -975,13 +973,15 @@ def getModel(descriptor):
     growth_rate = int(descriptor.split("_")[17][2:])
     biasFlag = True
 
-    model = rdnDenoiserResRelu(input_channels=1,
-                nb_of_features=nb_of_features,
-                nb_of_blocks=nb_of_blocks,
-                layer_in_each_block=layer_in_each_block, 
-                growth_rate=growth_rate,
-                out_channel=1,
-                bias = biasFlag)
+    model = rdnDenoiserResRelu(
+        input_channels=1,
+        nb_of_features=nb_of_features,
+        nb_of_blocks=nb_of_blocks,
+        layer_in_each_block=layer_in_each_block, 
+        growth_rate=growth_rate,
+        out_channel=1,
+        bias = biasFlag
+    )
 
     model.load_state_dict(torch.load(filePath, map_location='cpu'))
     for param in model.parameters():
