@@ -1088,8 +1088,8 @@ def getModel3dDenoiser(descriptor):
     print(sum(pVal.numel() for pVal in model.parameters() if not pVal.requires_grad))
     return model
 
-def getModelForImplicitLD(descriptor, frequency_selection, getMaxFlag = True, numIter = 25, save_models=False, base_folder=trainedNetOffset):
-    folderPath = base_folder + "training/deqmpi/"+descriptor
+def getModelForImplicitLD(descriptor, frequency_selection, getMaxFlag = True, numIter = 25, save_models=False, base_folder=trainedNetOffset+"training/deqmpi/"):
+    folderPath = os.path.join(base_folder, descriptor)
 
     fileName = "epoch150END.pth"
     if getMaxFlag:
